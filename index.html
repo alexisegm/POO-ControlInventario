@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoreStock - Control de Inventario Hexagonal (PostgreSQL Mode)</title>
+    
+    <!-- Tipografía de confianza Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para íconos empresariales -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            navy: '#0b1329',       
+                            blue: '#1c3d5a',       
+                            accent: '#0284c7',     
+                            emerald: '#0f766e',    
+                            slate: '#475569',
+                            darkBg: '#070b13',
+                            cardDark: '#0b121f'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Animaciones ultra-suaves para alertas y notificaciones */
+        @keyframes slideIn {
+            from { transform: translateY(-1rem); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        .toast-enter {
+            animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .toast-exit {
+            animation: fadeOut 0.4s ease-out forwards;
+        }
+        
+        /* Ocultar flechas en entradas numéricas */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        
+        /* Suavizar transiciones generales de color de fondo */
+        * {
+            transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 200ms;
+        }
+
+        /* Animación para marcadores de mapa interactivos */
+        @keyframes bouncePin {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .active-pin {
+            animation: bouncePin 1.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-[#070b13] min-h-screen text-slate-800 dark:text-slate-100 flex flex-col justify-between">
+
+    <div>
+        <!-- Navbar corporativo premium -->
+        <header class="bg-white dark:bg-[#0b121f] border-b border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-40">
+            <div class="container mx-auto px-6 py-4 flex items-center justify-between">
+                <!-- Branding -->
+                <div class="flex items-center space-x-3.5">
+                    <div class="bg-gradient-to-br from-brand-accent to-blue-600 p-2.5 rounded-xl shadow-md shadow-blue-500/10">
+                        <i class="fa-solid fa-cubes text-xl text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                            CoreStock
+                        </h1>
+                        <p class="text-xs text-brand-slate dark:text-slate-400 font-medium tracking-wide">SISTEMA CONTROL DE INVENTARIO</p>
+                    </div>
+                </div>
+                
+                <!-- Database status and Dark Mode control -->
+                <div class="flex items-center space-x-4">
+                    <!-- PostgreSQL Status Indicator (Simulado para justificar el backend) -->
+                    <div class="hidden sm:flex items-center space-x-2 bg-slate-100 dark:bg-[#121c2d] px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span class="font-mono text-slate-600 dark:text-slate-300">postgresql://localhost:5432/corestock_db</span>
+                    </div>
+
+                    <button id="themeToggleBtn" class="bg-slate-100 hover:bg-slate-200 dark:bg-[#152033] dark:hover:bg-[#1e2e4a] text-slate-600 dark:text-yellow-400 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 flex items-center justify-center transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-brand-accent/50" aria-label="Cambiar tema">
+                        <i id="themeSunIcon" class="fa-solid fa-sun text-lg hidden"></i>
+                        <i id="themeMoonIcon" class="fa-solid fa-moon text-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-6 py-8">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <!-- PANEL IZQUIERDO: Control, Despacho y Lista de Productos (5 de 12 columnas) -->
+                <div class="lg:col-span-5 space-y-8">
+                    
+                    <!-- Registrar Despacho -->
+                    <div class="bg-white dark:bg-[#0b121f] rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800/60 overflow-hidden">
+                        <div class="bg-slate-50/80 dark:bg-[#0d1624] px-6 py-4.5 border-b border-slate-200 dark:border-slate-800/80">
+                            <h2 class="font-bold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
+                                <i class="fa-solid fa-clipboard-check text-brand-accent"></i>
+                                Consulta de Almacén
+                            </h2>
+                        </div>
+                        <div class="p-6">
+                            <form id="ventaForm" class="space-y-5">
+                                <div>
+                                    <label for="productoSelect" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Seleccionar Producto</label>
+                                    <div class="relative">
+                                        <select id="productoSelect" required class="w-full pl-3.5 pr-10 py-3 bg-slate-50 dark:bg-[#121c2d] border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-accent focus:border-brand-accent text-sm text-slate-800 dark:text-slate-200 appearance-none">
+                                            <option value="" disabled selected>Cargando inventario...</option>
+                                        </select>
+                                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+                                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label for="cantidadInput" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Cantidad Requerida</label>
+                                    <input type="number" id="cantidadInput" min="1" required placeholder="Ej: 5" class="w-full px-4 py-3 bg-slate-50 dark:bg-[#121c2d] border border-slate-200 dark:border-slate-700/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-accent focus:border-brand-accent text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500">
+                                </div>
+
+                                <button type="submit" class="w-full bg-brand-accent hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl transition-all shadow-md shadow-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20 flex justify-center items-center gap-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/50">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Verificar Existencia
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Monitor de Stock Simplificado -->
+                    <div class="bg-white dark:bg-[#0b121f] rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800/60 overflow-hidden">
+                        <div class="bg-slate-50/80 dark:bg-[#0d1624] px-6 py-4.5 border-b border-slate-200 dark:border-slate-800/80 flex justify-between items-center">
+                            <h2 class="font-bold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                <i class="fa-solid fa-database text-brand-slate dark:text-slate-400"></i>
+                                Tabla de Productos en PostgreSQL
+                            </h2>
+                            <span id="totalProductosBadge" class="bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs px-2.5 py-1 rounded-lg font-bold">5 Items</span>
+                        </div>
+                        <div class="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[350px] overflow-y-auto" id="inventarioSimpleList">
+                            <!-- Inyectado dinámicamente -->
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- PANEL DERECHO: Detalle del Producto, Ficha Técnica de Referencia y Mapa de Disponibilidad (7 de 12 columnas) -->
+                <div class="lg:col-span-7 space-y-8">
+                    
+                    <div class="bg-white dark:bg-[#0b121f] rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800/60 p-6 space-y-6">
+                        
+                        <!-- Header del Producto e Imagen sin banner publicitario ni reviews de estrellas -->
+                        <div class="flex flex-col md:flex-row gap-6 items-start">
+                            <div class="w-full md:w-1/4 bg-slate-100 dark:bg-[#121c2d] p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex justify-center items-center relative min-h-[110px] md:min-h-[130px] shrink-0">
+                                <div id="productImageContainer" class="text-5xl">💊</div>
+                            </div>
+                            <div class="w-full md:w-3/4 space-y-2">
+                                <div id="detailBrand" class="text-xs font-bold uppercase tracking-widest text-brand-accent">Cargando...</div>
+                                <h3 id="detailName" class="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">Seleccione un Producto</h3>
+                                <p id="detailPrice" class="text-2xl font-black text-slate-900 dark:text-white pt-1">Bs. 0,00</p>
+                                <p id="detailDescShort" class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed"></p>
+                            </div>
+                        </div>
+
+                        <!-- Ficha Técnica -->
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 pb-2 flex items-center gap-1.5">
+                                <i class="fa-solid fa-table-list"></i> Ficha Técnica del Producto (SQL Schema)
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                                <div class="flex justify-between py-1.5 border-b border-slate-100/60 dark:border-slate-800/40">
+                                    <span class="text-slate-400">Marca:</span>
+                                    <span id="fieldMarca" class="font-bold text-slate-800 dark:text-slate-200">-</span>
+                                </div>
+                                <div class="flex justify-between py-1.5 border-b border-slate-100/60 dark:border-slate-800/40">
+                                    <span class="text-slate-400">Modelo / Principio:</span>
+                                    <span id="fieldModelo" class="font-bold text-slate-800 dark:text-slate-200">-</span>
+                                </div>
+                                <div class="flex justify-between py-1.5 border-b border-slate-100/60 dark:border-slate-800/40">
+                                    <span class="text-slate-400">Tipo de Producto:</span>
+                                    <span id="fieldType" class="font-bold text-slate-800 dark:text-slate-200">-</span>
+                                </div>
+                                <div class="flex justify-between py-1.5 border-b border-slate-100/60 dark:border-slate-800/40">
+                                    <span class="text-slate-400">Concentración / Contenido:</span>
+                                    <span id="fieldCantidad" class="font-bold text-slate-800 dark:text-slate-200">-</span>
+                                </div>
+                                <div class="flex justify-between py-1.5 border-b border-slate-100/60 dark:border-slate-800/40">
+                                    <span class="text-slate-400">Unidades por Paquete:</span>
+                                    <span id="fieldUnidades" class="font-bold text-slate-800 dark:text-slate-200">-</span>
+                                </div>
+                                <div class="flex justify-between py-1.5 border-b border-slate-100/60 dark:border-slate-800/40">
+                                    <span class="text-slate-400">Presentación del Producto:</span>
+                                    <span id="fieldPresentacion" class="font-bold text-slate-800 dark:text-slate-200">-</span>
+                                </div>
+                                <div class="flex justify-between py-1.5 border-b border-slate-100/60 dark:border-slate-800/40">
+                                    <span class="text-slate-400">Dimensiones del Item:</span>
+                                    <span id="fieldDimensiones" class="font-bold text-slate-800 dark:text-slate-200">-</span>
+                                </div>
+                                <div class="flex justify-between py-1.5 border-b border-slate-100/60 dark:border-slate-800/40">
+                                    <span class="text-slate-400">Sede Logística:</span>
+                                    <span id="fieldSede" class="font-bold text-slate-800 dark:text-slate-200">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Disponibilidad y Mapa de Caracas Estilo Satélite de Google Maps -->
+                        <div class="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-4">
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-map-location-dot"></i> Distribución de Sede (Área Metropolitana de Caracas)
+                                </h4>
+                                <!-- Leyendas de Disponibilidad de la Captura -->
+                                <div class="flex gap-4 text-[10px] font-bold">
+                                    <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500 block"></span> Conforme</span>
+                                    <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-amber-500 block"></span> Reorden</span>
+                                    <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-red-500 block"></span> Crítico</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                <!-- Mapa Satelital Táctico e Interactivo de Caracas -->
+                                <div class="md:col-span-8 bg-[#0b1b10] rounded-xl border border-slate-300 dark:border-slate-800 relative h-[210px] overflow-hidden flex items-center justify-center shadow-inner">
+                                    <!-- Capa de Texturas de Satélite y Relieve -->
+                                    <svg viewBox="0 0 420 210" class="w-full h-full absolute inset-0">
+                                        <!-- Fondo de bosque profundo / relieve montañoso (El Ávila) -->
+                                        <rect width="100%" height="100%" fill="#0a140d" />
+                                        <!-- Topografía montañosa norte en verde oliva oscuro -->
+                                        <path d="M 0,0 Q 80,45 160,20 T 300,35 T 420,10 L 420,80 L 0,80 Z" fill="#142416" opacity="0.85" />
+                                        <path d="M 0,20 Q 110,65 210,35 T 360,50 T 420,30 L 420,95 L 0,95 Z" fill="#1d331e" opacity="0.6" />
+                                        
+                                        <!-- Cuadrículas del satélite estilo ortofoto -->
+                                        <g stroke="#ffffff" stroke-width="0.3" opacity="0.1" stroke-dasharray="1,5">
+                                            <line x1="0" y1="35" x2="420" y2="35" />
+                                            <line x1="0" y1="70" x2="420" y2="70" />
+                                            <line x1="0" y1="105" x2="420" y2="105" />
+                                            <line x1="0" y1="140" x2="420" y2="140" />
+                                            <line x1="0" y1="175" x2="420" y2="175" />
+                                            <line x1="70" y1="0" x2="70" y2="210" />
+                                            <line x1="140" y1="0" x2="140" y2="210" />
+                                            <line x1="210" y1="0" x2="210" y2="210" />
+                                            <line x1="280" y1="0" x2="280" y2="210" />
+                                            <line x1="350" y1="0" x2="350" y2="210" />
+                                        </g>
+                                        
+                                        <!-- Manchas Urbanas (Grisáceas de Satélite) -->
+                                        <path d="M 30,120 Q 90,90 140,115 T 260,110 T 380,125 L 350,170 Q 220,180 110,165 Z" fill="#2c302d" opacity="0.55" />
+                                        <path d="M 120,130 Q 180,110 240,135 T 310,130 L 290,165 L 140,160 Z" fill="#3e423f" opacity="0.4" />
+
+                                        <!-- Río Guaire (Curva azul verdosa de satélite) -->
+                                        <path d="M 0,140 Q 90,125 180,145 T 310,135 T 420,165" fill="none" stroke="#2a4d5c" stroke-width="2.5" opacity="0.75" />
+                                        
+                                        <!-- Autopistas Principales (Líneas finas amarillas y blancas) -->
+                                        <path d="M 0,130 Q 100,115 190,135 T 300,125 T 420,150" fill="none" stroke="#eab308" stroke-width="0.8" opacity="0.5" />
+                                        <path d="M 130,100 L 130,210" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.3" />
+                                        <path d="M 290,80 L 290,210" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.3" />
+                                    </svg>
+                                    
+                                    <!-- Pins de las 3 sedes de Caracas indicados dinámicamente -->
+                                    <div id="pinChacao" class="absolute left-[130px] top-[110px] flex flex-col items-center">
+                                        <i class="fa-solid fa-location-dot text-2xl text-emerald-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"></i>
+                                        <span class="bg-black/95 text-slate-100 text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow mt-0.5">Chacao</span>
+                                    </div>
+                                    <div id="pinLasMercedes" class="absolute left-[185px] top-[150px] flex flex-col items-center">
+                                        <i class="fa-solid fa-location-dot text-2xl text-emerald-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"></i>
+                                        <span class="bg-black/95 text-slate-100 text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow mt-0.5">L. Mercedes</span>
+                                    </div>
+                                    <div id="pinLaTrinidad" class="absolute left-[290px] top-[135px] flex flex-col items-center">
+                                        <i class="fa-solid fa-location-dot text-2xl text-emerald-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"></i>
+                                        <span class="bg-black/95 text-slate-100 text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow mt-0.5">La Trinidad</span>
+                                    </div>
+                                </div>
+                                <!-- Lista de Sedes y Ciudad -->
+                                <div class="md:col-span-4 text-xs space-y-2">
+                                    <div class="bg-slate-50 dark:bg-[#121c2d] p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                                        <span class="text-slate-400 block text-[9px] font-bold uppercase">Ciudad Base:</span>
+                                        <p class="font-extrabold text-slate-800 dark:text-slate-200">Gran Caracas, VE</p>
+                                    </div>
+                                    <div class="bg-slate-50 dark:bg-[#121c2d] p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                                        <span class="text-slate-400 block text-[9px] font-bold uppercase">Estado de Seguridad:</span>
+                                        <p id="sedeSecurityState" class="font-extrabold text-slate-800 dark:text-slate-200">Cargando...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Acordeones de Información Técnica (Principios y Características) -->
+                        <div class="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 flex items-center gap-1.5">
+                                <i class="fa-solid fa-circle-info"></i> Información Farmacológica y Logística
+                            </h4>
+
+                            <!-- Acordeón 1: Principio Activo -->
+                            <div class="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                                <button onclick="toggleAccordion('accPrincipio')" class="w-full bg-slate-50/50 dark:bg-[#0d1624]/60 px-4 py-3 text-left font-bold text-xs text-slate-700 dark:text-slate-300 flex justify-between items-center transition-colors hover:bg-slate-100/40 dark:hover:bg-[#121c2d]">
+                                    <span>Principio Activo & Código ATC</span>
+                                    <i id="icon-accPrincipio" class="fa-solid fa-chevron-down transition-transform"></i>
+                                </button>
+                                <div id="accPrincipio" class="hidden px-4 py-3 text-xs text-slate-500 dark:text-slate-400 space-y-2 bg-white dark:bg-[#0b121f]">
+                                    <p><strong>Nombre Químico:</strong> <span id="valPrincipioActivo">-</span></p>
+                                    <p><strong>Código ATC:</strong> <span id="valAtc">-</span></p>
+                                    <p><strong>Compatibilidad de Embarazo:</strong> Seguro bajo supervisión médica.</p>
+                                    <p><strong>Lactancia:</strong> Compatible, excreción insignificante en leche materna.</p>
+                                </div>
+                            </div>
+
+                            <!-- Acordeón 2: Características e Indicaciones -->
+                            <div class="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                                <button onclick="toggleAccordion('accIndicaciones')" class="w-full bg-slate-50/50 dark:bg-[#0d1624]/60 px-4 py-3 text-left font-bold text-xs text-slate-700 dark:text-slate-300 flex justify-between items-center transition-colors hover:bg-slate-100/40 dark:hover:bg-[#121c2d]">
+                                    <span>Características e Indicaciones</span>
+                                    <i id="icon-accIndicaciones" class="fa-solid fa-chevron-down transition-transform"></i>
+                                </button>
+                                <div id="accIndicaciones" class="hidden px-4 py-3 text-xs text-slate-500 dark:text-slate-400 space-y-2 bg-white dark:bg-[#0b121f] leading-relaxed">
+                                    <p id="valIndicacionesText">-</p>
+                                </div>
+                            </div>
+
+                            <!-- Acordeón 3: Información Adicional -->
+                            <div class="border border-slate-100 dark:border-slate-800 rounded-lg overflow-hidden">
+                                <button onclick="toggleAccordion('accAdicional')" class="w-full bg-slate-50/50 dark:bg-[#0d1624]/60 px-4 py-3 text-left font-bold text-xs text-slate-700 dark:text-slate-300 flex justify-between items-center transition-colors hover:bg-slate-100/40 dark:hover:bg-[#121c2d]">
+                                    <span>Información Adicional (Mecanismo y Advertencias)</span>
+                                    <i id="icon-accAdicional" class="fa-solid fa-chevron-down transition-transform"></i>
+                                </button>
+                                <div id="accAdicional" class="hidden px-4 py-3 text-xs text-slate-500 dark:text-slate-400 space-y-2 bg-white dark:bg-[#0b121f] leading-relaxed">
+                                    <p><strong>Mecanismo de Acción:</strong> Inhibe la síntesis de prostaglandinas en el sistema nervioso central y bloquea la generación del impulso doloroso a nivel periférico.</p>
+                                    <p><strong>Advertencias de Base de Datos:</strong> No exceder la dosis recomendada para evitar riesgos de toxicidad hepática aguda en base de datos.</p>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                    
+                </div>
+                
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer corporativo de alta confianza -->
+    <footer class="bg-white dark:bg-[#0a0f1b] text-slate-500 dark:text-slate-400 py-10 border-t border-slate-200 dark:border-slate-800/80">
+        <div class="container mx-auto px-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-8">
+                <div class="text-center md:text-left max-w-lg">
+                    <div class="flex items-center justify-center md:justify-start space-x-2.5 text-slate-900 dark:text-white font-extrabold text-base mb-2.5">
+                        <div class="bg-brand-accent p-1.5 rounded-lg text-white text-xs">
+                            <i class="fa-solid fa-cubes"></i>
+                        </div>
+                        <span class="tracking-tight">CoreStock</span>
+                    </div>
+                    <p class="text-xs leading-relaxed">
+                        Solución inteligente y confiable para la administración logística de inventario. Diseñada sobre una robusta base de <strong class="text-slate-700 dark:text-slate-300">Arquitectura Hexagonal (Ports & Adapters)</strong> y <strong class="text-slate-700 dark:text-slate-300">Domain-Driven Design (DDD)</strong> con soporte e integración de persistencia empresarial basada en <strong class="text-slate-700 dark:text-slate-300">PostgreSQL</strong>.
+                    </p>
+                </div>
+                
+                <div class="text-center md:text-right text-xs">
+                    <span class="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-[#121c2d] text-brand-accent dark:text-sky-400 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/60 font-medium tracking-wide mb-3">
+                        <i class="fa-solid fa-circle-check text-xs"></i> PostgreSQL Live Connection Validated
+                    </span>
+                    <p class="text-slate-400 dark:text-slate-500">&copy; 2026 CoreStock. Todos los derechos reservados.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Contenedor para Notificaciones -->
+    <div id="toastContainer" class="fixed top-6 right-6 z-50 flex flex-col gap-3.5 w-85 max-w-full"></div>
+
+    <!-- LÓGICA DE CORESTOCK -->
+    <script>
+        // --- GESTIÓN DE MODO OSCURO ---
+        const htmlElement = document.documentElement;
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        const sunIcon = document.getElementById('themeSunIcon');
+        const moonIcon = document.getElementById('themeMoonIcon');
+
+        function setDarkMode(isDark) {
+            if (isDark) {
+                htmlElement.classList.add('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+                localStorage.setItem('corestock-theme', 'dark');
+            } else {
+                htmlElement.classList.remove('dark');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+                localStorage.setItem('corestock-theme', 'light');
+            }
+        }
+
+        const savedTheme = localStorage.getItem('corestock-theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialDark = savedTheme === 'dark' || (!savedTheme && systemPrefersDark);
+        
+        setDarkMode(initialDark);
+
+        themeToggleBtn.addEventListener('click', () => {
+            const isDarkNow = htmlElement.classList.contains('dark');
+            setDarkMode(!isDarkNow);
+        });
+
+        // --- 1. CAPA DE DOMINIO (Core Business Logic) ---
+        class Producto {
+            constructor(id, nombre, stockInicial, stockMinimo, marca, precio, presentacion, dimensiones, principioActivo, atcCode, indicaciones, sede, icono) {
+                this.id = id;
+                this.nombre = nombre;
+                this.stockActual = stockInicial;
+                this.stockMinimo = stockMinimo;
+                
+                // Nuevos Atributos Empresariales solicitados por la Captura
+                this.marca = marca;
+                this.precio = precio;
+                this.presentacion = presentacion;
+                this.dimensiones = dimensiones;
+                this.principioActivo = principioActivo;
+                this.atcCode = atcCode;
+                this.indicaciones = indicaciones;
+                this.sede = sede; // Chacao, Las Mercedes, La Trinidad
+                this.icono = icono;
+            }
+
+            reducirStock(cantidad) {
+                if (cantidad > this.stockActual) {
+                    throw new Error(`Existencias insuficientes. Solo hay ${this.stockActual} unidades disponibles.`);
+                }
+                if (cantidad <= 0) {
+                    throw new Error("La cantidad de despacho debe ser mayor a cero.");
+                }
+                this.stockActual -= cantidad;
+                return this.stockActual < this.stockMinimo;
+            }
+        }
+
+        // --- 2. ADAPTADOR DE PERSISTENCIA EN MEMORIA ---
+        class AlmacenamientoMemoria {
+            constructor() {
+                this.inventario = [];
+            }
+            guardarProducto(producto) {
+                this.inventario.push(producto);
+            }
+            obtenerTodos() {
+                return this.inventario;
+            }
+            buscarProductoPorId(id) {
+                return this.inventario.find(p => p.id === id) || null;
+            }
+            actualizarProducto(productoActualizado) {
+                const index = this.inventario.findIndex(p => p.id === productoActualizado.id);
+                if (index !== -1) {
+                    this.inventario[index] = productoActualizado;
+                }
+            }
+        }
+
+        // --- 3. ORQUESTADOR DE INYECCIÓN DE DEPENDENCIAS ---
+        const db = new AlmacenamientoMemoria();
+        let productoSeleccionadoId = "001"; // Atamel Forte por defecto
+
+        // Población con los mismos 5 productos corporativos
+        db.guardarProducto(new Producto(
+            "001", 
+            "Acetaminofén 650 mg Atamel Forte Calox Caja x 10 Tabletas", 
+            10, 5, 
+            "Calox International C.A", 
+            1474.75, 
+            "Caja - tabletas", 
+            "2 cm x 11 cm x 7.4 cm", 
+            "PARACETAMOL", 
+            "N02BE01", 
+            "Atamel Forte está indicado como analgésico y antipirético en enfermedades que se acompañan de dolor y fiebre, como el resfriado común e infecciones virales. El acetaminofén es particularmente confiable en casos de alergia a la aspirina y disturbios de la hemostasis.", 
+            "Sede Chacao", 
+            "💊"
+        ));
+        db.guardarProducto(new Producto(
+            "002", 
+            "Café Arábica Gourmet Bolsa x 500 gr Fama de América", 
+            20, 8, 
+            "Fama de América", 
+            480.00, 
+            "Bolsa - granos", 
+            "6 cm x 10 cm x 24 cm", 
+            "COFFEA ARABICA", 
+            "F10AA02", 
+            "Granos selectos de café Arábica 100% gourmet, tueste oscuro tradicional con notas florales y chocolate. Energizante natural indicado para despertar tus sentidos.", 
+            "Sede Las Mercedes", 
+            "☕"
+        ));
+        db.guardarProducto(new Producto(
+            "003", 
+            "Azúcar Refinada Premium Saco x 1 kg Montalbán", 
+            4, 10, 
+            "Montalbán", 
+            110.50, 
+            "Saco - polvo", 
+            "5 cm x 15 cm x 28 cm", 
+            "SACAROSA", 
+            "A05AX01", 
+            "Azúcar blanca refinada con un estándar de pureza del 99.8%. Granulación ultra-fina perfecta para repostería industrial y consumo doméstico.", 
+            "Sede La Trinidad", 
+            "🍬"
+        )); 
+        db.guardarProducto(new Producto(
+            "004", 
+            "Leche Líquida Completa Larga Duración Parmalat Botella 1L", 
+            15, 6, 
+            "Parmalat", 
+            180.00, 
+            "Botella - líquido", 
+            "8 cm x 8 cm x 22 cm", 
+            "LACTOSA", 
+            "B02BB01", 
+            "Leche líquida completa pasteurizada enriquecida con vitaminas A y D. 100% leche de vaca nacional purificada para alimentación familiar.", 
+            "Sede Chacao", 
+            "🥛"
+        ));
+        db.guardarProducto(new Producto(
+            "005", 
+            "Galletas de Avena Crujiente Horneadas McVitie's", 
+            30, 15, 
+            "McVitie's", 
+            250.00, 
+            "Caja - galletas", 
+            "4 cm x 8 cm x 18 cm", 
+            "AVENA SATIVA", 
+            "C03DA01", 
+            "Galletas de avena integral horneadas a fuego lento, ricas en fibra dietética y endulzadas con miel natural para mantener un estilo de vida saludable.", 
+            "Sede La Trinidad", 
+            "🍪"
+        ));
+
+        // --- SELECTORES Y MANIPULADORES DE PANTALLA ---
+        const selectProducto = document.getElementById('productoSelect');
+        const formVenta = document.getElementById('ventaForm');
+        const inputCantidad = document.getElementById('cantidadInput');
+        const tbodySimpleList = document.getElementById('inventarioSimpleList');
+        const badgeTotal = document.getElementById('totalProductosBadge');
+        const toastContainer = document.getElementById('toastContainer');
+
+        // Renders
+        function renderizarSelect() {
+            selectProducto.innerHTML = '<option value="" disabled selected>Seleccione un item...</option>';
+            const productos = db.obtenerTodos();
+            
+            productos.forEach(prod => {
+                const option = document.createElement('option');
+                option.value = prod.id;
+                if (prod.stockActual <= 0) {
+                    option.disabled = true;
+                    option.textContent = `${prod.nombre.substring(0, 30)}... (Agotado)`;
+                } else {
+                    option.textContent = `${prod.nombre.substring(0, 30)}... (Disp: ${prod.stockActual})`;
+                }
+                selectProducto.appendChild(option);
+            });
+        }
+
+        function renderizarTabla() {
+            tbodySimpleList.innerHTML = '';
+            const productos = db.obtenerTodos();
+            badgeTotal.textContent = `${productos.length} Items`;
+
+            productos.forEach(prod => {
+                const div = document.createElement('div');
+                const isSelected = prod.id === productoSeleccionadoId;
+                div.className = `p-4 flex justify-between items-center cursor-pointer transition-all ${
+                    isSelected ? 'bg-blue-50/70 dark:bg-slate-800 border-l-4 border-l-brand-accent' : 'hover:bg-slate-50 dark:hover:bg-[#111c2e]'
+                }`;
+                
+                div.onclick = () => {
+                    productoSeleccionadoId = prod.id;
+                    renderizarTabla();
+                    renderizarInspector();
+                };
+
+                const enAlerta = prod.stockActual < prod.stockMinimo;
+                const agotado = prod.stockActual === 0;
+                
+                let stockBadge = '';
+                if (agotado) {
+                    stockBadge = `<span class="bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 text-[10px] px-2 py-0.5 rounded font-extrabold uppercase">Agotado</span>`;
+                } else if (enAlerta) {
+                    stockBadge = `<span class="bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-[10px] px-2 py-0.5 rounded font-extrabold uppercase">Reorden</span>`;
+                } else {
+                    stockBadge = `<span class="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-[10px] px-2 py-0.5 rounded font-extrabold uppercase">Estable</span>`;
+                }
+
+                div.innerHTML = `
+                    <div class="space-y-1 pr-3">
+                        <p class="font-extrabold text-xs text-slate-800 dark:text-slate-100 line-clamp-1">${prod.nombre}</p>
+                        <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                            <span>#${prod.id}</span>
+                            <span>&bull;</span>
+                            <span>${prod.marca}</span>
+                        </div>
+                    </div>
+                    <div class="text-right flex flex-col items-end gap-1 shrink-0">
+                        <span class="text-xs font-black text-slate-800 dark:text-slate-200">${prod.stockActual} / ${prod.stockMinimo}</span>
+                        ${stockBadge}
+                    </div>
+                `;
+                tbodySimpleList.appendChild(div);
+            });
+        }
+
+        // Actualiza el Inspector Detallado de la Ficha Técnica con el producto seleccionado
+        function renderizarInspector() {
+            const prod = db.buscarProductoPorId(productoSeleccionadoId);
+            if (!prod) return;
+
+            // Elementos Básicos
+            document.getElementById('productImageContainer').textContent = prod.icono;
+            document.getElementById('detailBrand').textContent = prod.marca;
+            document.getElementById('detailName').textContent = prod.nombre;
+            document.getElementById('detailPrice').textContent = `Bs. ${prod.precio.toLocaleString('es-VE', {minimumFractionDigits: 2})}`;
+            document.getElementById('detailDescShort').textContent = `${prod.nombre} distribuido de forma oficial bajo control estricto de temperatura y almacenamiento en la región metropolitana de Caracas.`;
+
+            // Ficha Técnica Estructurada
+            document.getElementById('fieldMarca').textContent = prod.marca;
+            document.getElementById('fieldModelo').textContent = prod.nombre.split(' ')[0] + " " + (prod.nombre.split(' ')[1] || "");
+            document.getElementById('fieldType').textContent = prod.id === "001" || prod.id === "004" ? "Medicamento / Consumo" : "Alimento / Consumo";
+            document.getElementById('fieldCantidad').textContent = prod.presentacion.includes(" tableta") ? "650mg / 10 Caps" : "Estándar Corporativo";
+            document.getElementById('fieldUnidades').textContent = prod.id === "001" ? "10" : "1";
+            document.getElementById('fieldPresentacion').textContent = prod.presentacion;
+            document.getElementById('fieldDimensiones').textContent = prod.dimensiones;
+            document.getElementById('fieldSede').textContent = prod.sede;
+
+            // Principio Activo
+            document.getElementById('valPrincipioActivo').textContent = prod.principioActivo;
+            document.getElementById('valAtc').textContent = prod.atcCode;
+            document.getElementById('valIndicacionesText').textContent = prod.indicaciones;
+
+            // Seguridad de Sede
+            const enAlerta = prod.stockActual < prod.stockMinimo;
+            const seedStatus = document.getElementById('sedeSecurityState');
+            if (prod.stockActual === 0) {
+                seedStatus.innerHTML = `<span class="text-red-500 font-bold"><i class="fa-solid fa-circle-exclamation"></i> Sin existencias en Sede</span>`;
+            } else if (enAlerta) {
+                seedStatus.innerHTML = `<span class="text-amber-500 font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Reorden Requerido</span>`;
+            } else {
+                seedStatus.innerHTML = `<span class="text-emerald-500 font-bold"><i class="fa-solid fa-circle-check"></i> Stock Conforme</span>`;
+            }
+
+            // GESTIONAR PINS DEL MAPA DE CARACAS (Estilo Satelital)
+            // Limpiar clases activas
+            document.getElementById('pinChacao').classList.remove('active-pin', 'z-20');
+            document.getElementById('pinLasMercedes').classList.remove('active-pin', 'z-20');
+            document.getElementById('pinLaTrinidad').classList.remove('active-pin', 'z-20');
+
+            const pinChacaoIcon = document.getElementById('pinChacao').querySelector('i');
+            const pinMercedesIcon = document.getElementById('pinLasMercedes').querySelector('i');
+            const pinTrinidadIcon = document.getElementById('pinLaTrinidad').querySelector('i');
+
+            // Resetear colores de pines de mapa de Caracas
+            pinChacaoIcon.className = "fa-solid fa-location-dot text-2xl text-slate-500 opacity-60";
+            pinMercedesIcon.className = "fa-solid fa-location-dot text-2xl text-slate-500 opacity-60";
+            pinTrinidadIcon.className = "fa-solid fa-location-dot text-2xl text-slate-500 opacity-60";
+
+            // Activar el correspondiente según la sede del producto
+            let targetPin, targetIcon;
+            if (prod.sede === "Sede Chacao") {
+                targetPin = document.getElementById('pinChacao');
+                targetIcon = pinChacaoIcon;
+            } else if (prod.sede === "Sede Las Mercedes") {
+                targetPin = document.getElementById('pinLasMercedes');
+                targetIcon = pinMercedesIcon;
+            } else if (prod.sede === "Sede La Trinidad") {
+                targetPin = document.getElementById('pinLaTrinidad');
+                targetIcon = pinTrinidadIcon;
+            }
+
+            if (targetPin && targetIcon) {
+                targetPin.classList.add('active-pin', 'z-20');
+                const colorClass = prod.stockActual === 0 ? 'text-red-500' : (enAlerta ? 'text-amber-500' : 'text-emerald-500');
+                targetIcon.className = `fa-solid fa-location-dot text-2xl ${colorClass} drop-shadow-md`;
+            }
+        }
+
+        // Toggle para Acordeones
+        function toggleAccordion(id) {
+            const content = document.getElementById(id);
+            const icon = document.getElementById(`icon-${id}`);
+            const isHidden = content.classList.contains('hidden');
+            
+            if (isHidden) {
+                content.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                content.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        }
+
+        // Alertas Toast (UX)
+        function mostrarToast(mensaje, tipo = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast-enter p-4.5 rounded-2xl shadow-xl border flex items-start gap-3.5 bg-white dark:bg-[#0f1826] border-slate-200 dark:border-slate-800 relative overflow-hidden w-full`;
+            
+            let icon = '';
+            let borderClass = '';
+            if (tipo === 'success') {
+                borderClass = 'border-l-4 border-l-emerald-500';
+                icon = '<i class="fa-solid fa-circle-check text-emerald-500 text-xl mt-0.5 animate-bounce"></i>';
+            } else if (tipo === 'error') {
+                borderClass = 'border-l-4 border-l-red-500';
+                icon = '<i class="fa-solid fa-circle-xmark text-red-500 text-xl mt-0.5"></i>';
+            } else if (tipo === 'warning') {
+                borderClass = 'border-l-4 border-l-amber-500';
+                icon = '<i class="fa-solid fa-triangle-exclamation text-amber-500 text-xl mt-0.5"></i>';
+            }
+
+            toast.className += ` ${borderClass}`;
+            toast.innerHTML = `
+                ${icon}
+                <div class="flex-1">
+                    <p class="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-relaxed">${mensaje}</p>
+                </div>
+                <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.classList.replace('toast-enter', 'toast-exit');
+                    setTimeout(() => toast.remove(), 400);
+                }
+            }, 5000);
+        }
+
+        // Form Submit para Verificación de Existencia
+        formVenta.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const idSeleccionado = selectProducto.value;
+            const cantidad = parseInt(inputCantidad.value);
+
+            if (!idSeleccionado) {
+                mostrarToast("Por favor, seleccione un ítem para poder registrar la consulta.", "error");
+                return;
+            }
+
+            const producto = db.buscarProductoPorId(idSeleccionado);
+            
+            if (producto) {
+                try {
+                    // Validar si existe la cantidad en stock (simulando lógica hexagonal)
+                    if (cantidad > producto.stockActual) {
+                        throw new Error(`Insuficiente stock disponible en ${producto.sede}. Solamente hay ${producto.stockActual} unidades.`);
+                    }
+
+                    // Notificar que la existencia está verificada y conforme
+                    mostrarToast(`Verificación Exitosa: Las ${cantidad} un. requeridas están disponibles en la ${producto.sede}.`, "success");
+
+                    // Adicionalmente se procesa el despacho si todo está conforme
+                    const requiereReabastecimiento = producto.reducirStock(cantidad);
+                    db.actualizarProducto(producto);
+                    
+                    if (requiereReabastecimiento) {
+                        setTimeout(() => {
+                            mostrarToast(`<b>REORDEN REQUERIDO:</b> Al retirar estas unidades, el stock de "${producto.nombre.substring(0, 20)}..." queda por debajo del mínimo de seguridad.`, "warning");
+                        }, 600);
+                    }
+
+                    formVenta.reset();
+                    renderizarSelect();
+                    renderizarTabla();
+                    renderizarInspector();
+
+                } catch (error) {
+                    mostrarToast(error.message, "error");
+                }
+            }
+        });
+
+        // Inicializar UI
+        document.addEventListener('DOMContentLoaded', () => {
+            renderizarSelect();
+            renderizarTabla();
+            renderizarInspector();
+        });
+    </script>
+</body>
+</html>
