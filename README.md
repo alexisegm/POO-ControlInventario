@@ -1,20 +1,14 @@
-## 📋 Hoja de Ruta y Estado del Proyecto
+# CoreStock - Sistema Empresarial de Control de Inventario
 
-### Fase 1 a 4: Arquitectura y Capas Básicas
-- [x] Diseñar el modelo de Dominio (`Producto`)
-- [x] Definir interfaces de abstracción (Puertos de Almacenamiento y UI)
-- [x] Implementar Adaptador de Infraestructura en Memoria
-- [x] Diseñar Interfaz de Usuario por Consola con manejo de errores (UX)
+## 📋 Resumen del Proyecto
+CoreStock es un sistema logístico desarrollado para gestionar el inventario del área metropolitana de la Gran Caracas. Implementado bajo los paradigmas de Arquitectura Hexagonal y Domain-Driven Design (DDD), aísla por completo las reglas de negocio de las interfaces de usuario.
 
-### Fase 5: Orquestación y Entorno (En Progreso)
-- [x] Crear el Orquestador global (`main.cpp`)
-- [x] Configurar el script de construcción (`CMakeLists.txt`)
-- [ ] Resolver dependencias del constructor en el entorno local (MinGW32-Make)
-- [ ] Compilar ejecutable y realizar pruebas de integración del ciclo de venta
+## 🚀 Fases de Desarrollo y Estado
 
-### Fase 6: Documentación y Aseguramiento Técnico
-- [ ] Crear la carpeta `docs/` en la raíz del repositorio
-- [ ] Redactar Especificaciones Técnicas (`spec.md`)
-- [ ] Documentar el alcance de la IA y decisiones humanas (`planificacion.md`)
-- [ ] Registrar mejoras de UX y manejo de excepciones (`bitacora-mejoras.md`)
-- [ ] Simulación de Defensa en grupo previa al 16/06
+* **Fase 1 a 4 (Completadas):** Diseño del modelo de Dominio (`Producto`), definición de interfaces de abstracción, e implementación de UI interactiva por consola.
+* **Fase 5 (Completadas):** Creación del orquestador global (`main.cpp`) y configuración del script de construcción nativo (`CMakeLists.txt`).
+* **Fase 6 (Finalizada):** Modularización completa del frontend (HTML/CSS/JS) separando el dominio y los componentes visuales. Auditoría y redacción de especificaciones técnicas.
+
+## ⚙️ Estructura de Ejecución
+* El núcleo opera en C++ puro persistiendo datos en memoria RAM de alta velocidad para entornos de presentación.
+* El despliegue de interfaz web se ejecuta estáticamente a través del módulo `/frontend`.

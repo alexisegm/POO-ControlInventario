@@ -3,14 +3,15 @@
 #include <string>
 #include "../Domain/Producto.h"
 
+// Puerto de salida (Interface en C++): define las reglas de comunicación del Dominio
+// con cualquier almacenamiento de base de datos o almacenamiento temporal.
 class IAlmacenamiento {
 public:
-    // Destructor virtual: Buena práctica obligatoria en C++ para interfaces
     virtual ~IAlmacenamiento() = default;
 
-    // Los "contratos" que deben cumplirse
+    // Métodos obligatorios que cualquier adaptador debe implementar
     virtual void guardarProducto(const Producto& producto) = 0;
-    virtual Producto* buscarProducto(std::string id) = 0;
+    virtual Producto* buscarProducto(std::string nombre) = 0;
     virtual std::vector<Producto> obtenerTodos() = 0;
     virtual void actualizarProducto(const Producto& producto) = 0;
 };

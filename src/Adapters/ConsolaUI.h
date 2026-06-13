@@ -1,13 +1,15 @@
 #pragma once
 #include "../Ports/IAlmacenamiento.h"
 #include <iostream>
-#include <limits> // Necesario para limpiar errores de entrada
+#include <limits>
+#include <vector>
 
+// Adaptador de entrada que maneja la interfaz por consola interactiva
 class ConsolaUI {
 private:
-    IAlmacenamiento* almacenamiento; // Inyección de dependencias (Modularización)
+    IAlmacenamiento* almacenamiento; // Inyección de dependencias
 
-    // Función auxiliar para manejar errores de teclado del usuario
+    // Método seguro para evitar fallas ante entradas erróneas del usuario (UX)
     int leerEnteroSeguro();
 
 public:

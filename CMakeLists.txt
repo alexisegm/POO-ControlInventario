@@ -1,8 +1,8 @@
-# Versión mínima requerida de CMake
+# Versión mínima requerida de CMake.
 cmake_minimum_required(VERSION 3.10)
 
-# Nombre de tu proyecto
-project(ControlInventario)
+# Nombre de nuestro proyecto con la marca comercial oficial.
+project(CoreStock)
 
 # Especificamos el estándar de C++ (C++11 es suficiente y muy estable)
 set(CMAKE_CXX_STANDARD 11)

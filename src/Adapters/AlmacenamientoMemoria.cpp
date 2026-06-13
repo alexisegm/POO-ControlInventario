@@ -4,13 +4,13 @@ void AlmacenamientoMemoria::guardarProducto(const Producto& producto) {
     inventario.push_back(producto);
 }
 
-Producto* AlmacenamientoMemoria::buscarProducto(std::string id) {
+Producto* AlmacenamientoMemoria::buscarProducto(std::string nombre) {
     for (auto& prod : inventario) {
-        if (prod.getNombre() == id) { // Para simplificar, buscaremos por nombre/id temporalmente
+        if (prod.getNombre() == nombre) {
             return &prod;
         }
     }
-    return nullptr; // No se encontró
+    return nullptr;
 }
 
 std::vector<Producto> AlmacenamientoMemoria::obtenerTodos() {
@@ -19,7 +19,7 @@ std::vector<Producto> AlmacenamientoMemoria::obtenerTodos() {
 
 void AlmacenamientoMemoria::actualizarProducto(const Producto& productoActualizado) {
     for (auto& prod : inventario) {
-        if (prod.getNombre() == productoActualizado.getNombre()) {
+        if (prod.getId() == productoActualizado.getId()) {
             prod = productoActualizado;
             break;
         }
